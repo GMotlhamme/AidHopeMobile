@@ -44,6 +44,13 @@ fun AidHopeApp() {
         mutableStateOf<String?>(null)
     }
 
+    val supportSessions = remember {
+        mutableStateListOf<SupportSession>()
+    }
+    val awarenessEvents = remember {
+        mutableStateListOf<AwarenessEvent>()
+    }
+
     val beneficiaries = remember {
         mutableStateListOf(
             BeneficiaryRecord(
@@ -126,7 +133,79 @@ fun AidHopeApp() {
         }
     ) { padding ->
 
+
         when {
+            // Check this first so the form opens regardless of the selected tab.
+            selectedAction == "Add Beneficiary" -> {
+                BeneficiaryFormScreen(
+                    onBack = {
+                        selectedAction = ""
+                    },
+                    onSave = { newBeneficiary ->
+                        val nextNumber = (beneficiaries.size + 1)
+                        val newId = "B${nextNumber.toString().padStart(3, '0')}"
+
+                        beneficiaries.add(
+                            newBeneficiary.copy(id = newId)
+                        )
+
+                        selectedAction = ""
+                        selectedTab = "Beneficiaries"
+                        selectedBeneficiaryId = null
+                    }
+                )
+            }
+
+
+            selectedAction == "Log Support Session" -> {
+                SupportSessionsScreen(
+                    beneficiaries = beneficiaries,
+                    sessions = supportSessions,
+                    modifier = Modifier.padding(padding),
+                    onBack = {
+                        selectedAction = ""
+                    },
+                    onSave = { newSession ->
+                        val nextNumber = supportSessions.size + 1
+                        val newId = "S${nextNumber.toString().padStart(3, '0')}"
+
+                        supportSessions.add(
+                            newSession.copy(id = newId)
+                        )
+                    }
+                )
+            }
+            selectedAction == "Create Awareness Event" -> {
+                AwarenessEventFormScreen(
+                    events = awarenessEvents,
+                    modifier = Modifier.padding(padding),
+                    onBack = {
+                        selectedAction = ""
+                    },
+                    onSave = { newEvent ->
+                        val nextNumber = awarenessEvents.size + 1
+                        val newId = "AE${nextNumber.toString().padStart(3, '0')}"
+
+                        awarenessEvents.add(
+                            newEvent.copy(id = newId)
+                        )
+
+                        selectedAction = ""
+                        selectedTab = "Awareness"
+                    }
+                )
+            }
+            selectedTab == "Awareness" -> {
+                AwarenessEventsScreen(
+                    events = awarenessEvents,
+                    modifier = Modifier.padding(padding),
+                    onCreateEvent = {
+                        selectedAction = "Create Awareness Event"
+                    }
+                )
+            }
+
+            // Show the directory or selected beneficiary when the form is not open.
             selectedTab == "Beneficiaries" -> {
                 val selectedBeneficiary = beneficiaries.find {
                     it.id == selectedBeneficiaryId
@@ -172,6 +251,7 @@ fun AidHopeApp() {
                 }
             }
 
+            // Keep your existing Home dashboard branch below this.
             selectedTab == "Home" && selectedAction.isEmpty() -> {
                 DashboardScreen(
                     modifier = Modifier.padding(padding),
@@ -179,15 +259,7 @@ fun AidHopeApp() {
                 )
             }
 
-            selectedTab == "Beneficiaries" -> {
-                BeneficiariesScreen(
-                    beneficiaries = beneficiaries,
-                    modifier = Modifier.padding(padding),
-                    onAdd = { selectedAction = "Add Beneficiary" },
-                    onSelect = TODO()
-                )
-            }
-
+            // Keep your existing else branch below this.
             else -> {
                 PlaceholderScreen(
                     title = selectedAction.ifEmpty { selectedTab },
@@ -415,6 +487,24 @@ data class BeneficiaryRecord(
         get() = "$firstName $lastName"
 }
 
+data class SupportSession(
+    val id: String,
+    val beneficiaryId: String,
+    val beneficiaryName: String,
+    val date: String,
+    val type: String,
+    val notes: String,
+    val followUpRequired: Boolean
+)
+
+data class AwarenessEvent(
+    val id: String,
+    val title: String,
+    val date: String,
+    val location: String,
+    val description: String,
+    val targetAudience: String
+)
 @Composable
 fun BeneficiariesScreen(
     beneficiaries: List<BeneficiaryRecord>,
@@ -898,6 +988,595 @@ fun BeneficiaryDetailsScreen(
                 contentDescription = null
             )
             Text(" Delete Beneficiary")
+        }
+    }
+}
+
+
+@Composable
+fun SupportSessionsScreen(
+    beneficiaries: List<BeneficiaryRecord>,
+    sessions: List<SupportSession>,
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit,
+    onSave: (SupportSession) -> Unit
+) {
+    var selectedBeneficiaryId by remember {
+        mutableStateOf(beneficiaries.firstOrNull()?.id.orEmpty())
+    }
+    var beneficiaryMenuExpanded by remember { mutableStateOf(false) }
+    var date by remember { mutableStateOf("") }
+    var type by remember { mutableStateOf("Counselling") }
+    var notes by remember { mutableStateOf("") }
+    var followUpRequired by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+
+    val selectedBeneficiary = beneficiaries.find {
+        it.id == selectedBeneficiaryId
+    }
+
+    val sessionTypes = listOf(
+        "Counselling",
+        "Health Education",
+        "Food/Resource Assistance",
+        "Follow-up",
+        "Other"
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        TextButton(onClick = onBack) {
+            Icon(
+                Icons.Default.ArrowBack,
+                contentDescription = null
+            )
+            Text(" Back to Dashboard")
+        }
+
+        Text(
+            "Log Support Session",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark
+        )
+
+        Text(
+            "Record the support provided to a beneficiary.",
+            color = MutedText
+        )
+
+        // Choose the beneficiary receiving support.
+        Text("Beneficiary *", fontWeight = FontWeight.Medium)
+
+        Box {
+            OutlinedButton(
+                onClick = { beneficiaryMenuExpanded = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    selectedBeneficiary?.fullName
+                        ?: "Select a beneficiary",
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = "Choose beneficiary"
+                )
+            }
+
+            DropdownMenu(
+                expanded = beneficiaryMenuExpanded,
+                onDismissRequest = {
+                    beneficiaryMenuExpanded = false
+                },
+                modifier = Modifier.heightIn(max = 300.dp)
+            ) {
+                beneficiaries.forEach { beneficiary ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "${beneficiary.fullName} (${beneficiary.id})"
+                            )
+                        },
+                        onClick = {
+                            selectedBeneficiaryId = beneficiary.id
+                            beneficiaryMenuExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        // Record the session date.
+        OutlinedTextField(
+            value = date,
+            onValueChange = { date = it },
+            label = { Text("Session Date *") },
+            placeholder = { Text("YYYY-MM-DD") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        // Select the type of support provided.
+        Text("Support Type *", fontWeight = FontWeight.Medium)
+
+        sessionTypes.forEach { option ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = type == option,
+                    onClick = { type = option }
+                )
+                Text(option)
+            }
+        }
+
+        // Capture notes about the session.
+        OutlinedTextField(
+            value = notes,
+            onValueChange = { notes = it },
+            label = { Text("Session Notes *") },
+            placeholder = {
+                Text("Describe the support provided...")
+            },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 3
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = followUpRequired,
+                onCheckedChange = { followUpRequired = it }
+            )
+            Text("Follow-up required")
+        }
+
+        if (errorMessage.isNotEmpty()) {
+            Text(
+                errorMessage,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
+        Button(
+            onClick = {
+                when {
+                    selectedBeneficiary == null ->
+                        errorMessage = "Please select a beneficiary."
+
+                    !date.matches(
+                        Regex("""\d{4}-\d{2}-\d{2}""")
+                    ) ->
+                        errorMessage =
+                            "Enter the date using YYYY-MM-DD."
+
+                    runCatching {
+                        java.time.LocalDate.parse(date)
+                    }.isFailure ->
+                        errorMessage = "Enter a valid calendar date."
+
+                    notes.isBlank() ->
+                        errorMessage =
+                            "Please enter the session notes."
+
+                    else -> {
+                        onSave(
+                            SupportSession(
+                                id = "",
+                                beneficiaryId = selectedBeneficiary.id,
+                                beneficiaryName = selectedBeneficiary.fullName,
+                                date = date,
+                                type = type,
+                                notes = notes.trim(),
+                                followUpRequired = followUpRequired
+                            )
+                        )
+
+                        // Clear the fields after saving.
+                        date = ""
+                        notes = ""
+                        followUpRequired = false
+                        errorMessage = ""
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AidBurgundy
+            )
+        ) {
+            Icon(
+                Icons.Default.Save,
+                contentDescription = null
+            )
+            Text(" Save Session")
+        }
+
+        HorizontalDivider()
+
+        Text(
+            "Recorded Sessions (${sessions.size})",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark
+        )
+
+        if (sessions.isEmpty()) {
+            Text(
+                "No support sessions recorded yet.",
+                color = MutedText
+            )
+        } else {
+            sessions.reversed().forEach { session ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            session.beneficiaryName,
+                            fontWeight = FontWeight.Bold,
+                            color = TextDark
+                        )
+
+                        Text(
+                            "Session ID: ${session.id}",
+                            fontSize = 12.sp,
+                            color = MutedText
+                        )
+
+                        Text("Date: ${session.date}")
+                        Text("Type: ${session.type}")
+                        Text("Notes: ${session.notes}")
+
+                        Text(
+                            if (session.followUpRequired)
+                                "Follow-up: Required"
+                            else
+                                "Follow-up: Not required",
+                            color = if (session.followUpRequired)
+                                AidBurgundy
+                            else
+                                MutedText,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AwarenessEventFormScreen(
+    events: List<AwarenessEvent>,
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit,
+    onSave: (AwarenessEvent) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf("") }
+    var location by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var targetAudience by remember { mutableStateOf("General Community") }
+    var errorMessage by remember { mutableStateOf("") }
+
+    val audiences = listOf(
+        "General Community",
+        "Young Adults",
+        "Schools",
+        "Healthcare Workers",
+        "Community Organisations"
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(PageBackground)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Go back",
+                    tint = AidBurgundy
+                )
+            }
+
+            Text(
+                text = "Create Awareness Event",
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark
+            )
+        }
+
+        Text(
+            text = "Enter the details for the new awareness event.",
+            color = MutedText
+        )
+
+        OutlinedTextField(
+            value = title,
+            onValueChange = { title = it },
+            label = { Text("Event title") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        OutlinedTextField(
+            value = date,
+            onValueChange = { date = it },
+            label = { Text("Event date (YYYY-MM-DD)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        OutlinedTextField(
+            value = location,
+            onValueChange = { location = it },
+            label = { Text("Venue / Location") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        OutlinedTextField(
+            value = description,
+            onValueChange = { description = it },
+            label = { Text("Event description") },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 3
+        )
+
+        Text(
+            text = "Target audience",
+            fontWeight = FontWeight.SemiBold,
+            color = TextDark
+        )
+
+        audiences.forEach { audience ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = targetAudience == audience,
+                    onClick = { targetAudience = audience },
+                    colors = RadioButtonDefaults.colors(
+                        selectedColor = AidBurgundy
+                    )
+                )
+
+                Text(
+                    text = audience,
+                    color = TextDark
+                )
+            }
+        }
+
+        if (errorMessage.isNotBlank()) {
+            Text(
+                text = errorMessage,
+                color = AidBurgundy
+            )
+        }
+
+        Button(
+            onClick = {
+                val validDate = runCatching {
+                    java.time.LocalDate.parse(date)
+                }.isSuccess
+
+                errorMessage = when {
+                    title.isBlank() ->
+                        "Please enter an event title."
+
+                    !validDate ->
+                        "Enter a valid date using YYYY-MM-DD."
+
+                    location.isBlank() ->
+                        "Please enter the event location."
+
+                    description.isBlank() ->
+                        "Please enter an event description."
+
+                    else -> ""
+                }
+
+                if (errorMessage.isBlank()) {
+                    onSave(
+                        AwarenessEvent(
+                            id = "",
+                            title = title.trim(),
+                            date = date,
+                            location = location.trim(),
+                            description = description.trim(),
+                            targetAudience = targetAudience
+                        )
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AidBurgundy
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.Save,
+                contentDescription = null
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Save Event")
+        }
+
+        OutlinedButton(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Cancel")
+        }
+    }
+}
+
+
+@Composable
+fun AwarenessEventsScreen(
+    events: List<AwarenessEvent>,
+    modifier: Modifier = Modifier,
+    onCreateEvent: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(PageBackground)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "Awareness Events",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark
+        )
+
+        Text(
+            text = "Manage community awareness activities.",
+            color = MutedText
+        )
+
+        Button(
+            onClick = onCreateEvent,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AidBurgundy
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Create Awareness Event")
+        }
+
+        if (events.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Event,
+                        contentDescription = null,
+                        tint = AidBurgundy
+                    )
+
+                    Text(
+                        text = "No events created yet",
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextDark
+                    )
+
+                    Text(
+                        text = "Create an event to see it listed here.",
+                        color = MutedText
+                    )
+                }
+            }
+        } else {
+            events.sortedByDescending { it.date }.forEach { event ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    ),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 2.dp
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = event.title,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AidBurgundy
+                        )
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                tint = MutedText
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = event.date,
+                                color = TextDark
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = MutedText
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = event.location,
+                                color = TextDark
+                            )
+                        }
+
+                        Text(
+                            text = event.description,
+                            color = TextDark
+                        )
+
+                        Text(
+                            text = "Audience: ${event.targetAudience}",
+                            color = MutedText
+                        )
+
+                        Text(
+                            text = "Event ID: ${event.id}",
+                            color = MutedText,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
         }
     }
 }
