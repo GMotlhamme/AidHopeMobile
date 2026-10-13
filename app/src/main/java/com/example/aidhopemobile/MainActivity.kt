@@ -50,7 +50,33 @@ fun AidHopeApp() {
     val awarenessEvents = remember {
         mutableStateListOf<AwarenessEvent>()
     }
-
+    val attendanceRecords = remember {
+        mutableStateListOf<AttendanceRecord>()
+    }
+    val awarenessRequests = remember {
+        mutableStateListOf(
+            AwarenessRequest(
+                id = "AR001",
+                requesterName = "Sample Community Contact",
+                organisation = "Community Organisation A",
+                contactNumber = "071 000 0000",
+                email = "community@example.com",
+                requestedDate = "2026-11-15",
+                topic = "HIV Awareness",
+                notes = "Request for a community awareness session."
+            ),
+            AwarenessRequest(
+                id = "AR002",
+                requesterName = "Sample School Contact",
+                organisation = "Community School B",
+                contactNumber = "072 000 0000",
+                email = "school@example.com",
+                requestedDate = "2026-11-20",
+                topic = "Health Education",
+                notes = "Request for an educational session for learners."
+            )
+        )
+    }
     val beneficiaries = remember {
         mutableStateListOf(
             BeneficiaryRecord(
@@ -175,6 +201,9 @@ fun AidHopeApp() {
                     }
                 )
             }
+
+
+
             selectedAction == "Create Awareness Event" -> {
                 AwarenessEventFormScreen(
                     events = awarenessEvents,
@@ -204,7 +233,49 @@ fun AidHopeApp() {
                     }
                 )
             }
+            selectedAction == "View Awareness Requests" -> {
+                AwarenessRequestsScreen(
+                    requests = awarenessRequests,
+                    modifier = Modifier.padding(padding),
+                    onBack = {
+                        selectedAction = ""
+                    },
+                    onUpdateRequest = { updatedRequest ->
+                        val index = awarenessRequests.indexOfFirst {
+                            it.id == updatedRequest.id
+                        }
 
+                        if (index != -1) {
+                            awarenessRequests[index] = updatedRequest
+                        }
+                    }
+                )
+            }
+
+            selectedAction == "Manage Attendance" -> {
+                AttendanceScreen(
+                    events = awarenessEvents,
+                    attendanceRecords = attendanceRecords,
+                    modifier = Modifier.padding(padding),
+                    onBack = {
+                        selectedAction = ""
+                    },
+                    onSaveAttendance = { records ->
+                        records.forEach { updatedRecord ->
+                            val index = attendanceRecords.indexOfFirst {
+                                it.eventId == updatedRecord.eventId &&
+                                        it.attendeeContact == updatedRecord.attendeeContact
+                            }
+
+                            if (index >= 0) {
+                                attendanceRecords[index] = updatedRecord
+                            } else {
+                                attendanceRecords.add(updatedRecord)
+                            }
+                        }
+                    }
+                )
+            }
             // Show the directory or selected beneficiary when the form is not open.
             selectedTab == "Beneficiaries" -> {
                 val selectedBeneficiary = beneficiaries.find {
@@ -259,6 +330,19 @@ fun AidHopeApp() {
                 )
             }
 
+            selectedTab == "Reports" -> ReportsScreen(
+                beneficiaryCount = beneficiaries.size,
+                supportSessionCount = supportSessions.size,
+                awarenessEventCount = awarenessEvents.size,
+                attendanceCount = attendanceRecords.size,
+                presentCount = attendanceRecords.count { it.present },
+                pendingRequestCount = awarenessRequests.count {
+                    it.status == "Pending"
+                },
+                modifier = Modifier.padding(padding)
+            )
+
+
             // Keep your existing else branch below this.
             else -> {
                 PlaceholderScreen(
@@ -273,6 +357,111 @@ fun AidHopeApp() {
         }
     }
 }
+@Composable
+fun ReportsScreen(
+    beneficiaryCount: Int,
+    supportSessionCount: Int,
+    awarenessEventCount: Int,
+    attendanceCount: Int,
+    presentCount: Int,
+    pendingRequestCount: Int,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(PageBackground)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "Reports",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark
+        )
+
+        Text(
+            text = "Overview of AID HOPE+ activities",
+            fontSize = 14.sp,
+            color = MutedText
+        )
+
+        ReportSummaryCard(
+            title = "Registered Beneficiaries",
+            value = beneficiaryCount.toString(),
+            description = "Total beneficiaries in the system"
+        )
+
+        ReportSummaryCard(
+            title = "Support Sessions",
+            value = supportSessionCount.toString(),
+            description = "Total support sessions logged"
+        )
+
+        ReportSummaryCard(
+            title = "Awareness Events",
+            value = awarenessEventCount.toString(),
+            description = "Total awareness events created"
+        )
+
+        ReportSummaryCard(
+            title = "Attendance",
+            value = "$presentCount / $attendanceCount",
+            description = "Attendees marked present out of all registered attendees"
+        )
+
+        ReportSummaryCard(
+            title = "Pending Requests",
+            value = pendingRequestCount.toString(),
+            description = "Awareness requests awaiting a decision"
+        )
+    }
+}
+
+@Composable
+fun ReportSummaryCard(
+    title: String,
+    value: String,
+    description: String
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 2.dp
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                color = MutedText
+            )
+
+            Text(
+                text = value,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = AidBurgundy
+            )
+
+            Text(
+                text = description,
+                fontSize = 12.sp,
+                color = MutedText
+            )
+        }
+    }
+}
+
 
 @Composable
 fun DashboardScreen(
@@ -354,9 +543,14 @@ fun DashboardScreen(
             onClick = { onAction("Create Awareness Event") }
         )
         QuickAction(
+            title = "Manage Attendance",
+            icon = Icons.Default.CheckCircle,
+            onClick = { onAction("Manage Attendance") }
+        )
+        QuickAction(
             title = "View Awareness Requests",
             icon = Icons.Default.Assignment,
-            onClick = { onAction("Awareness Requests") }
+            onClick = { onAction("View Awareness Requests") }
         )
     }
 }
@@ -504,6 +698,27 @@ data class AwarenessEvent(
     val location: String,
     val description: String,
     val targetAudience: String
+)
+
+data class AwarenessRequest(
+    val id: String,
+    val requesterName: String,
+    val organisation: String,
+    val contactNumber: String,
+    val email: String,
+    val requestedDate: String,
+    val topic: String,
+    val notes: String,
+    val status: String = "Pending",
+    val scheduledDate: String = ""
+)
+
+data class AttendanceRecord(
+    val eventId: String,
+    val eventTitle: String,
+    val attendeeName: String,
+    val attendeeContact: String,
+    val present: Boolean = false
 )
 @Composable
 fun BeneficiariesScreen(
@@ -1574,6 +1789,523 @@ fun AwarenessEventsScreen(
                             color = MutedText,
                             fontSize = 12.sp
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AwarenessRequestsScreen(
+    requests: List<AwarenessRequest>,
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit,
+    onUpdateRequest: (AwarenessRequest) -> Unit
+) {
+    var selectedRequestId by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    var scheduledDate by remember {
+        mutableStateOf("")
+    }
+
+    var errorMessage by remember {
+        mutableStateOf("")
+    }
+
+    val selectedRequest = requests.firstOrNull {
+        it.id == selectedRequestId
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(PageBackground)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = {
+                if (selectedRequestId != null) {
+                    selectedRequestId = null
+                    errorMessage = ""
+                } else {
+                    onBack()
+                }
+            }) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Go back",
+                    tint = AidBurgundy
+                )
+            }
+
+            Text(
+                text = if (selectedRequest == null) {
+                    "Awareness Requests"
+                } else {
+                    "Review Request"
+                },
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark
+            )
+        }
+
+        if (selectedRequest == null) {
+            if (requests.isEmpty()) {
+                Text(
+                    text = "There are no awareness requests yet.",
+                    color = MutedText
+                )
+            } else {
+                requests.forEach { request ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                selectedRequestId = request.id
+                                scheduledDate = request.scheduledDate
+                                errorMessage = ""
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color.White
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = request.organisation,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = AidBurgundy
+                            )
+
+                            Text(
+                                text = request.topic,
+                                color = TextDark
+                            )
+
+                            Text(
+                                text = "Requested date: ${request.requestedDate}",
+                                color = MutedText
+                            )
+
+                            Text(
+                                text = "Status: ${request.status}",
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (request.status == "Declined") {
+                                    AidBurgundy
+                                } else {
+                                    TextDark
+                                }
+                            )
+
+                            Text(
+                                text = "Tap to review",
+                                color = MutedText,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            Text(
+                text = selectedRequest.organisation,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = AidBurgundy
+            )
+
+            Text(
+                text = "Request ID: ${selectedRequest.id}",
+                color = MutedText
+            )
+
+            HorizontalDivider()
+
+            Text("Contact: ${selectedRequest.requesterName}")
+            Text("Phone: ${selectedRequest.contactNumber}")
+            Text("Email: ${selectedRequest.email}")
+            Text("Topic: ${selectedRequest.topic}")
+            Text("Requested date: ${selectedRequest.requestedDate}")
+            Text("Notes: ${selectedRequest.notes}")
+
+            HorizontalDivider()
+
+            Text(
+                text = "Current status: ${selectedRequest.status}",
+                fontWeight = FontWeight.Bold,
+                color = TextDark
+            )
+
+            if (
+                selectedRequest.status != "Declined" &&
+                selectedRequest.status != "Scheduled"
+            ) {
+                OutlinedTextField(
+                    value = scheduledDate,
+                    onValueChange = {
+                        scheduledDate = it
+                        errorMessage = ""
+                    },
+                    label = {
+                        Text("Scheduled date (YYYY-MM-DD)")
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+
+            if (errorMessage.isNotBlank()) {
+                Text(
+                    text = errorMessage,
+                    color = AidBurgundy
+                )
+            }
+
+            if (
+                selectedRequest.status == "Pending" ||
+                selectedRequest.status == "Accepted"
+            ) {
+                Button(
+                    onClick = {
+                        onUpdateRequest(
+                            selectedRequest.copy(status = "Accepted")
+                        )
+                        selectedRequestId = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AidBurgundy
+                    )
+                ) {
+                    Text("Accept Request")
+                }
+
+                Button(
+                    onClick = {
+                        onUpdateRequest(
+                            selectedRequest.copy(status = "Declined")
+                        )
+                        selectedRequestId = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.DarkGray
+                    )
+                ) {
+                    Text("Decline Request")
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        val validDate = runCatching {
+                            java.time.LocalDate.parse(scheduledDate)
+                        }.isSuccess
+
+                        if (!validDate) {
+                            errorMessage =
+                                "Enter a valid scheduled date using YYYY-MM-DD."
+                        } else {
+                            onUpdateRequest(
+                                selectedRequest.copy(
+                                    status = "Scheduled",
+                                    scheduledDate = scheduledDate
+                                )
+                            )
+                            selectedRequestId = null
+                            errorMessage = ""
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Schedule Request")
+                }
+            } else {
+                Text(
+                    text = if (selectedRequest.status == "Scheduled") {
+                        "Scheduled for: ${selectedRequest.scheduledDate}"
+                    } else {
+                        "This request has been declined."
+                    },
+                    color = MutedText
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AttendanceScreen(
+    events: List<AwarenessEvent>,
+    attendanceRecords: List<AttendanceRecord>,
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit,
+    onSaveAttendance: (List<AttendanceRecord>) -> Unit
+) {
+    var selectedEventId by remember {
+        mutableStateOf(events.firstOrNull()?.id.orEmpty())
+    }
+
+    var attendeeName by remember { mutableStateOf("") }
+    var attendeeContact by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
+
+    val selectedEvent = events.firstOrNull {
+        it.id == selectedEventId
+    }
+
+    val eventAttendance = attendanceRecords.filter {
+        it.eventId == selectedEventId
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(PageBackground)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Go back",
+                    tint = AidBurgundy
+                )
+            }
+
+            Text(
+                text = "Attendance Tracking",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark
+            )
+        }
+
+        if (events.isEmpty()) {
+            Text(
+                text = "Create an awareness event before recording attendance.",
+                color = MutedText
+            )
+        } else {
+            Text(
+                text = "Select an event",
+                fontWeight = FontWeight.SemiBold,
+                color = TextDark
+            )
+
+            events.forEach { event ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            if (selectedEventId == event.id) {
+                                Color(0xFFFFEDEE)
+                            } else {
+                                Color.White
+                            },
+                            RoundedCornerShape(10.dp)
+                        )
+                        .clickable {
+                            selectedEventId = event.id
+                            errorMessage = ""
+                        }
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = selectedEventId == event.id,
+                        onClick = {
+                            selectedEventId = event.id
+                            errorMessage = ""
+                        },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = AidBurgundy
+                        )
+                    )
+
+                    Column {
+                        Text(
+                            text = event.title,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextDark
+                        )
+                        Text(
+                            text = event.date,
+                            color = MutedText
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider()
+
+            Text(
+                text = selectedEvent?.title ?: "Selected event",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = AidBurgundy
+            )
+
+            Text(
+                text = "Add an attendee",
+                fontWeight = FontWeight.SemiBold,
+                color = TextDark
+            )
+
+            OutlinedTextField(
+                value = attendeeName,
+                onValueChange = { attendeeName = it },
+                label = { Text("Attendee name") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            OutlinedTextField(
+                value = attendeeContact,
+                onValueChange = { attendeeContact = it },
+                label = { Text("Contact number") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            if (errorMessage.isNotBlank()) {
+                Text(
+                    text = errorMessage,
+                    color = AidBurgundy
+                )
+            }
+
+            Button(
+                onClick = {
+                    when {
+                        selectedEvent == null ->
+                            errorMessage = "Please select an event."
+
+                        attendeeName.isBlank() ->
+                            errorMessage = "Enter the attendee's name."
+
+                        attendeeContact.isBlank() ->
+                            errorMessage = "Enter the attendee's contact number."
+
+                        eventAttendance.any {
+                            it.attendeeContact.equals(
+                                attendeeContact.trim(),
+                                ignoreCase = true
+                            )
+                        } ->
+                            errorMessage =
+                                "This contact is already registered for this event."
+
+                        else -> {
+                            onSaveAttendance(
+                                listOf(
+                                    AttendanceRecord(
+                                        eventId = selectedEvent.id,
+                                        eventTitle = selectedEvent.title,
+                                        attendeeName = attendeeName.trim(),
+                                        attendeeContact = attendeeContact.trim()
+                                    )
+                                )
+                            )
+
+                            attendeeName = ""
+                            attendeeContact = ""
+                            errorMessage = ""
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AidBurgundy
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PersonAdd,
+                    contentDescription = null
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Register Attendee")
+            }
+
+            HorizontalDivider()
+
+            Text(
+                text = "Registered Attendees (${eventAttendance.size})",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark
+            )
+
+            if (eventAttendance.isEmpty()) {
+                Text(
+                    text = "No attendees registered for this event.",
+                    color = MutedText
+                )
+            } else {
+                eventAttendance.forEach { record ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color.White
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = record.attendeeName,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TextDark
+                                )
+                                Text(
+                                    text = record.attendeeContact,
+                                    color = MutedText
+                                )
+                            }
+
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Checkbox(
+                                    checked = record.present,
+                                    onCheckedChange = { isPresent ->
+                                        onSaveAttendance(
+                                            listOf(
+                                                record.copy(present = isPresent)
+                                            )
+                                        )
+                                    },
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = AidBurgundy
+                                    )
+                                )
+                                Text(
+                                    text = if (record.present) {
+                                        "Present"
+                                    } else {
+                                        "Absent"
+                                    },
+                                    fontSize = 12.sp,
+                                    color = MutedText
+                                )
+                            }
+                        }
                     }
                 }
             }
